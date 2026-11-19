@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TravelWeather - Autogestión y Seguridad</title>
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- PWA: instalación como aplicación -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body class="bg-gray-100 text-gray-800">
 
@@ -170,6 +175,11 @@
             </div>
         </div>
     </div>
+
+    <!-- BOTÓN FLOTANTE DE INSTALACIÓN (PWA) -->
+    <button id="btnInstalar" class="hidden fixed bottom-4 right-4 z-40 bg-blue-600 text-white px-5 py-3 rounded-full shadow-lg font-bold hover:bg-blue-700">
+        📲 Instalar aplicación
+    </button>
 
     <script>
         let usuarioActual = null;
@@ -385,6 +395,41 @@
                 document.getElementById('tabla-destinos').innerHTML = html;
             });
         }
+    </script>
+
+    <!-- PWA: registro del service worker y botón de instalación -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+        }
+
+        const btnInstalar = document.getElementById('btnInstalar');
+        const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const yaInstalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+        let promptInstalar = null;
+
+        // Android / PC (Chrome, Edge): el navegador avisa que se puede instalar
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            promptInstalar = e;
+            if (!yaInstalada) btnInstalar.classList.remove('hidden');
+        });
+
+        btnInstalar.addEventListener('click', async () => {
+            if (promptInstalar) {
+                promptInstalar.prompt();
+                await promptInstalar.userChoice;
+                promptInstalar = null;
+                btnInstalar.classList.add('hidden');
+            } else if (esIOS) {
+                alert('En iPhone: toca el botón Compartir y luego "Agregar a pantalla de inicio".');
+            }
+        });
+
+        window.addEventListener('appinstalled', () => btnInstalar.classList.add('hidden'));
+
+        // iPhone no permite instalar con un clic, solo se muestran las instrucciones
+        if (esIOS && !yaInstalada) btnInstalar.classList.remove('hidden');
     </script>
 </body>
 </html>
