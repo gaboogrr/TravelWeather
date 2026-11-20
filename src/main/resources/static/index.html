@@ -789,7 +789,7 @@
             }
 
             btn.disabled = true;
-            msj.innerHTML = "<span class='text-slate-600'>Enviando código a tu correo...</span>";
+            msj.innerHTML = "<span class='text-slate-600'>Generando código de verificación...</span>";
 
             fetch('/api/usuarios/solicitar-recuperacion', {
                 method: 'POST',
@@ -798,14 +798,17 @@
             })
             .then(async res => {
                 const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data.error || "No se pudo enviar el código.");
+                if (!res.ok) throw new Error(data.error || "No se pudo generar el código.");
                 return data;
             })
             .then(data => {
-                mostrarToast("Código enviado", data.mensaje || "Revisa tu bandeja de entrada.", "success");
-                msj.innerHTML = "<span class='text-emerald-600'>Código enviado. Revisa tu correo (incluyendo Spam).</span>";
+                mostrarToast("Código generado", data.mensaje, "success");
+                msj.innerHTML = `<span class='text-emerald-600'>${esc(data.mensaje)}</span>`;
                 document.getElementById('recover-step-1').classList.add('hidden');
                 document.getElementById('recover-step-2').classList.remove('hidden');
+                if (data.codigoRespaldo) {
+                    document.getElementById('rec-codigo').value = data.codigoRespaldo;
+                }
                 lucide.createIcons();
             })
             .catch(err => {

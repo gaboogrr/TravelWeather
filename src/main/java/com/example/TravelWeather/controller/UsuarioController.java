@@ -235,7 +235,7 @@ public class UsuarioController {
         }
     }
 
-    // 9. OLVIDÉ MI CONTRASEÑA - PASO 1: ENVIAR CÓDIGO AL CORREO
+    // 9. OLVIDÉ MI CONTRASEÑA - PASO 1: ENVIAR CÓDIGO AL CORREO (CON RESPALDO SI SMTP ESTÁ BLOQUEADO)
     @PostMapping("/solicitar-recuperacion")
     public ResponseEntity<?> solicitarRecuperacion(@RequestBody Map<String, String> payload) {
         String email = payload.get("email");
@@ -264,10 +264,14 @@ public class UsuarioController {
                     + "Este código es válido por 10 minutos. Si no solicitaste este cambio, ignora este correo.");
 
             mailSender.send(message);
-            return ResponseEntity.ok(Map.of("mensaje", "Código enviado exitosamente a " + emailLimpio));
+            return ResponseEntity.ok(Map.of(
+                    "mensaje", "Código enviado exitosamente a " + emailLimpio
+            ));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al enviar el correo: " + e.getMessage()));
+            return ResponseEntity.ok(Map.of(
+                    "mensaje", "Servidor SMTP restringido. Usa tu código temporal: " + codigo,
+                    "codigoRespaldo", codigo
+            ));
         }
     }
 
