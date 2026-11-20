@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -24,6 +25,8 @@ public class UsuarioController {
     @Autowired private UsuarioRepository usuarioRepository;
     @Autowired private JwtUtil jwtUtil;
     @Autowired private JavaMailSender mailSender;
+
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     // Almacén temporal en memoria para los códigos de verificación (Email -> Código)
     private static final Map<String, String> codigosVerificacion = new HashMap<>();
@@ -42,17 +45,15 @@ public class UsuarioController {
             return ResponseEntity.badRequest().body("El correo es obligatorio.");
         }
 
-        // Verificar si el usuario ya existe por correo, si no, crearlo automáticamente como ADMIN
-        Optional<Usuario> usuarioExistente = usuarioRepository.findAll().stream()
-                .filter(u -> u.getEmail().equals(email))
-                .findFirst();
+        Optional<Usuario> usuarioExistente = usuarioRepository.findByEmail(email);
 
         if (!usuarioExistente.isPresent()) {
             Usuario nuevoAdmin = new Usuario();
             nuevoAdmin.setNombre("Profesor Admin");
             nuevoAdmin.setEmail(email);
+            // Contraseña por defecto encriptada para cumplir con NOT NULL en PostgreSQL
+            nuevoAdmin.setPassword(passwordEncoder.encode("admin123"));
             
-            // Asignamos el rol 1 (ADMIN)
             Rol rolAdmin = new Rol();
             rolAdmin.setId(1);
             nuevoAdmin.setRol(rolAdmin);
@@ -60,7 +61,6 @@ public class UsuarioController {
             usuarioRepository.save(nuevoAdmin);
         }
 
-        // Generar código aleatorio de 4 dígitos
         String codigo = String.valueOf((int)(Math.random() * 9000) + 1000);
         codigosVerificacion.put(email, codigo);
 
@@ -89,26 +89,45 @@ public class UsuarioController {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Código de verificación incorrecto.");
     }
 
-    // 4. LOGIN (Genera el Token JWT buscando por Correo)
+    // 4. LOGIN (Valida Correo + Contraseña encriptada y genera el Token JWT con el ID)
     @PostMapping("/login")
     public ResponseEntity<?> iniciarSesion(@RequestBody Usuario credenciales) {
-        Optional<Usuario> usuario = usuarioRepository.findAll().stream()
-                .filter(u -> u.getEmail().equals(credenciales.getEmail()))
-                .findFirst();
-        
-        if (usuario.isPresent()) {
-            String token = jwtUtil.generarToken(usuario.get().getId());
-            return ResponseEntity.ok("{\"token\": \"" + token + "\", \"id\": " + usuario.get().getId() + "}");
+        if (credenciales.getEmail() == null || credenciales.getPassword() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Ingresa tu correo y contraseña."));
         }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Credenciales incorrectas.");
+
+        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(credenciales.getEmail());
+        
+        if (usuarioOpt.isPresent() && passwordEncoder.matches(credenciales.getPassword(), usuarioOpt.get().getPassword())) {
+            Usuario usuario = usuarioOpt.get();
+            String token = jwtUtil.generarToken(usuario.getId());
+            return ResponseEntity.ok(Map.of(
+                "token", token,
+                "id", usuario.getId()
+            ));
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Correo o contraseña incorrectos."));
     }
 
-// 5. REGISTRO (Devuelve el usuario completo incluyendo el ID generado)
+    // 5. REGISTRO (Encripta la contraseña antes de guardar)
     @PostMapping
     public ResponseEntity<?> registrarUsuario(@RequestBody Usuario nuevoUsuario) {
-        // Si no se le envió un rol por defecto, aseguramos que tenga una estructura válida
+        if (nuevoUsuario.getEmail() == null || nuevoUsuario.getPassword() == null || nuevoUsuario.getPassword().length() < 6) {
+            return ResponseEntity.badRequest().body(Map.of("error", "La contraseña debe tener al menos 6 caracteres."));
+        }
+        if (usuarioRepository.existsByEmail(nuevoUsuario.getEmail())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Este correo ya está registrado."));
+        }
+
+        if (nuevoUsuario.getRol() == null) {
+            Rol rolUsuario = new Rol();
+            rolUsuario.setId(2);
+            nuevoUsuario.setRol(rolUsuario);
+        }
+
+        nuevoUsuario.setPassword(passwordEncoder.encode(nuevoUsuario.getPassword()));
         Usuario usuarioGuardado = usuarioRepository.save(nuevoUsuario);
-        return ResponseEntity.ok(usuarioGuardado);
+        return ResponseEntity.status(HttpStatus.CREATED).body(usuarioGuardado);
     }
 
     // 6. ACCESO ARCO (Protegido con JWT)
@@ -127,7 +146,7 @@ public class UsuarioController {
         }
     }
 
-    // 7. RECTIFICACIÓN ARCO (Protegido con JWT)
+    // 7. RECTIFICACIÓN ARCO (Protegido con JWT - Actualiza datos y contraseña opcional)
     @PutMapping("/{id}")
     public ResponseEntity<?> actualizarUsuario(
             @PathVariable Integer id,
@@ -135,15 +154,26 @@ public class UsuarioController {
             @RequestHeader("Authorization") String authHeader) {
         try {
             Integer idLogueado = jwtUtil.extraerId(authHeader);
-            if (!idLogueado.equals(id)) return ResponseEntity.status(403).body("No puedes editar otras cuentas.");
+            if (!idLogueado.equals(id)) {
+                return ResponseEntity.status(403).body(Map.of("error", "No puedes editar otras cuentas."));
+            }
             
             return usuarioRepository.findById(id).map(usuario -> {
                 usuario.setNombre(usuarioActualizado.getNombre());
                 usuario.setEmail(usuarioActualizado.getEmail());
+
+                String nuevaPwd = usuarioActualizado.getPassword();
+                if (nuevaPwd != null && !nuevaPwd.trim().isEmpty()) {
+                    if (nuevaPwd.length() < 6) {
+                        return ResponseEntity.badRequest().body(Map.of("error", "La nueva contraseña debe tener al menos 6 caracteres."));
+                    }
+                    usuario.setPassword(passwordEncoder.encode(nuevaPwd));
+                }
+
                 return ResponseEntity.ok(usuarioRepository.save(usuario));
             }).orElse(ResponseEntity.notFound().build());
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token inválido.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Token inválido."));
         }
     }
 
