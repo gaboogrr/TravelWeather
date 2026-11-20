@@ -77,7 +77,7 @@
     <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
     <div id="toast-container" class="fixed top-5 right-5 z-[60] flex flex-col gap-3 max-w-sm w-full pointer-events-none"></div>
 
-    <!-- MODAL DE CONFIRMACIÓN PERSONALIZADO -->
+    <!-- MODAL DE CONFIRMACIÓN PERSONALIZADO (CON VERIFICACIÓN DE CONTRASEÑA) -->
     <div id="custom-confirm-modal" class="hidden fixed inset-0 bg-slate-900/55 backdrop-blur-xs flex items-center justify-center z-[60] p-4 transition-opacity">
         <div class="bg-white rounded-2xl shadow-2xl border border-slate-200/80 max-w-md w-full p-6 animate-modal">
             <div class="flex items-start gap-4">
@@ -87,6 +87,19 @@
                 <div class="flex-1">
                     <h3 id="confirm-title" class="text-base font-semibold text-slate-900">Confirmar acción</h3>
                     <p id="confirm-message" class="text-xs sm:text-sm text-slate-600 mt-1.5 leading-relaxed whitespace-pre-line"></p>
+
+                    <div id="confirm-pwd-box" class="hidden mt-4">
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5">Ingresa tu contraseña actual para confirmar</label>
+                        <div class="relative">
+                            <i data-lucide="key-round" class="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5"></i>
+                            <input type="password" id="confirm-pwd-input" placeholder="Tu contraseña actual"
+                                   class="w-full pl-10 pr-10 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition">
+                            <button type="button" onclick="alternarVisibilidadPwd('confirm-pwd-input', this)" class="text-slate-400 hover:text-slate-700 absolute right-3 top-2 p-0.5 transition">
+                                <i data-lucide="eye" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <p id="confirm-pwd-error" class="hidden text-xs text-red-600 font-medium mt-1.5">Debes escribir tu contraseña actual.</p>
+                    </div>
                 </div>
             </div>
             <div class="mt-6 flex justify-end gap-2.5 pt-4 border-t border-slate-100">
@@ -209,8 +222,14 @@
                     </div>
                 </div>
             </div>
+
+            <div class="flex justify-end mt-2">
+                <button type="button" onclick="toggleAuth('recover')" class="text-xs font-medium text-slate-600 hover:text-slate-900 hover:underline transition">
+                    ¿Olvidaste tu contraseña?
+                </button>
+            </div>
             
-            <button onclick="loginTradicional()" class="btn-press w-full mt-6 bg-slate-900 text-white py-2.5 px-4 rounded-xl text-sm font-medium hover:bg-slate-800 shadow-xs flex items-center justify-center gap-2">
+            <button onclick="loginTradicional()" class="btn-press w-full mt-5 bg-slate-900 text-white py-2.5 px-4 rounded-xl text-sm font-medium hover:bg-slate-800 shadow-xs flex items-center justify-center gap-2">
                 <span>Iniciar Sesión</span>
                 <i data-lucide="arrow-right" class="w-4 h-4"></i>
             </button>
@@ -284,6 +303,81 @@
             
             <div class="mt-5 pt-4 border-t border-slate-100 text-center">
                 <p class="text-xs text-slate-500">¿Ya tienes cuenta? <button onclick="toggleAuth('login')" class="text-slate-900 font-semibold hover:underline">Inicia sesión</button></p>
+            </div>
+        </div>
+
+        <!-- RECUPERAR CONTRASEÑA -->
+        <div id="form-recover" class="hidden bg-white p-8 rounded-2xl shadow-sm border border-slate-200/90 w-full max-w-md animate-reveal">
+            <div class="flex flex-col items-center mb-6">
+                <div class="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center mb-3 shadow-sm">
+                    <i data-lucide="key-round" class="w-5 h-5"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Recuperar Contraseña</h1>
+                <p class="text-xs sm:text-sm text-slate-500 mt-1 text-center">Te enviaremos un código de 6 dígitos a tu correo registrado</p>
+            </div>
+
+            <!-- Paso 1: Solicitar código -->
+            <div id="recover-step-1" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1.5">Correo electrónico</label>
+                    <div class="relative">
+                        <i data-lucide="mail" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+                        <input type="email" id="rec-email" placeholder="nombre@ejemplo.com"
+                               onkeydown="if(event.key==='Enter') enviarCodigoRecuperacion()"
+                               class="w-full pl-10 pr-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition">
+                    </div>
+                </div>
+                <button id="btn-rec-enviar" onclick="enviarCodigoRecuperacion()" class="btn-press w-full bg-slate-900 text-white py-2.5 px-4 rounded-xl text-sm font-medium hover:bg-slate-800 shadow-xs flex items-center justify-center gap-2">
+                    <span>Enviar código de verificación</span>
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Paso 2: Validar código y nueva contraseña -->
+            <div id="recover-step-2" class="hidden space-y-3.5">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Código de verificación (6 dígitos)</label>
+                    <div class="relative">
+                        <i data-lucide="hash" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+                        <input type="text" id="rec-codigo" maxlength="6" placeholder="Ej. 482910"
+                               class="w-full pl-10 pr-3.5 py-2.5 text-sm tracking-widest font-mono border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Nueva contraseña</label>
+                    <div class="relative">
+                        <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+                        <input type="password" id="rec-pwd" placeholder="Mínimo 6 caracteres"
+                               class="w-full pl-10 pr-10 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition">
+                        <button type="button" onclick="alternarVisibilidadPwd('rec-pwd', this)" class="text-slate-400 hover:text-slate-700 absolute right-3 top-2.5 p-0.5 transition">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Confirmar nueva contraseña</label>
+                    <div class="relative">
+                        <i data-lucide="shield-check" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+                        <input type="password" id="rec-pwd-confirm" placeholder="Repite la nueva contraseña"
+                               onkeydown="if(event.key==='Enter') confirmarRecuperacion()"
+                               class="w-full pl-10 pr-10 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition">
+                        <button type="button" onclick="alternarVisibilidadPwd('rec-pwd-confirm', this)" class="text-slate-400 hover:text-slate-700 absolute right-3 top-2.5 p-0.5 transition">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                <button id="btn-rec-guardar" onclick="confirmarRecuperacion()" class="btn-press w-full bg-slate-900 text-white py-2.5 px-4 rounded-xl text-sm font-medium hover:bg-slate-800 shadow-xs">
+                    Restablecer contraseña
+                </button>
+                <button type="button" onclick="reiniciarRecuperacion()" class="w-full text-xs text-slate-500 hover:text-slate-800 py-1">
+                    Usar otro correo o reenviar código
+                </button>
+            </div>
+
+            <p id="msj-recover" class="text-center text-xs font-medium mt-3"></p>
+
+            <div class="mt-5 pt-4 border-t border-slate-100 text-center">
+                <p class="text-xs text-slate-500">¿Recordaste tu contraseña? <button onclick="toggleAuth('login')" class="text-slate-900 font-semibold hover:underline">Volver al inicio de sesión</button></p>
             </div>
         </div>
     </div>
@@ -589,7 +683,7 @@
             }, 4200);
         }
 
-        function mostrarConfirmacion({ titulo, mensaje, textoConfirmar = 'Confirmar', variante = 'primary' }) {
+        function mostrarConfirmacion({ titulo, mensaje, textoConfirmar = 'Confirmar', variante = 'primary', pedirPassword = false }) {
             return new Promise((resolve) => {
                 const modal = document.getElementById('custom-confirm-modal');
                 const titleEl = document.getElementById('confirm-title');
@@ -597,10 +691,21 @@
                 const iconWrapper = document.getElementById('confirm-icon-wrapper');
                 const btnOk = document.getElementById('confirm-btn-ok');
                 const btnCancel = document.getElementById('confirm-btn-cancel');
+                const pwdBox = document.getElementById('confirm-pwd-box');
+                const pwdInput = document.getElementById('confirm-pwd-input');
+                const pwdError = document.getElementById('confirm-pwd-error');
 
                 titleEl.textContent = titulo;
                 msgEl.textContent = mensaje;
                 btnOk.textContent = textoConfirmar;
+                pwdInput.value = '';
+                pwdError.classList.add('hidden');
+
+                if (pedirPassword) {
+                    pwdBox.classList.remove('hidden');
+                } else {
+                    pwdBox.classList.add('hidden');
+                }
 
                 if (variante === 'danger') {
                     iconWrapper.className = 'p-3 rounded-xl shrink-0 bg-red-50 text-red-600';
@@ -614,28 +719,141 @@
 
                 lucide.createIcons({ root: modal });
                 modal.classList.remove('hidden');
+                if (pedirPassword) setTimeout(() => pwdInput.focus(), 80);
 
                 const cerrar = (resultado) => {
                     modal.classList.add('hidden');
                     btnOk.onclick = null;
                     btnCancel.onclick = null;
+                    pwdInput.onkeydown = null;
                     resolve(resultado);
                 };
 
-                btnOk.onclick = () => cerrar(true);
-                btnCancel.onclick = () => cerrar(false);
+                btnOk.onclick = () => {
+                    if (pedirPassword) {
+                        const pwd = pwdInput.value;
+                        if (!pwd) {
+                            pwdError.classList.remove('hidden');
+                            pwdInput.focus();
+                            return;
+                        }
+                        cerrar(pwd);
+                    } else {
+                        cerrar(true);
+                    }
+                };
+
+                pwdInput.onkeydown = (e) => {
+                    if (e.key === 'Enter') btnOk.onclick();
+                };
+
+                btnCancel.onclick = () => cerrar(null);
             });
         }
 
         // ==========================================
-        // NAVEGACIÓN Y AUTENTICACIÓN CON CONTRASEÑA
+        // NAVEGACIÓN, AUTENTICACIÓN Y RECUPERACIÓN
         // ==========================================
         function toggleAuth(pantalla) {
             document.getElementById('form-login').classList.add('hidden');
             document.getElementById('form-register').classList.add('hidden');
+            document.getElementById('form-recover').classList.add('hidden');
             document.getElementById(`form-${pantalla}`).classList.remove('hidden');
             document.getElementById('msj-registro').innerHTML = "";
             document.getElementById('msj-login').innerHTML = "";
+            document.getElementById('msj-recover').innerHTML = "";
+            if (pantalla === 'recover') {
+                reiniciarRecuperacion();
+                const emailLogin = document.getElementById('login-email').value.trim();
+                if (emailLogin) document.getElementById('rec-email').value = emailLogin;
+            }
+            lucide.createIcons();
+        }
+
+        function reiniciarRecuperacion() {
+            document.getElementById('recover-step-1').classList.remove('hidden');
+            document.getElementById('recover-step-2').classList.add('hidden');
+            document.getElementById('rec-codigo').value = '';
+            document.getElementById('rec-pwd').value = '';
+            document.getElementById('rec-pwd-confirm').value = '';
+            document.getElementById('msj-recover').innerHTML = '';
+        }
+
+        function enviarCodigoRecuperacion() {
+            const email = document.getElementById('rec-email').value.trim();
+            const msj = document.getElementById('msj-recover');
+            const btn = document.getElementById('btn-rec-enviar');
+
+            if (!email) {
+                return msj.innerHTML = "<span class='text-red-600'>Ingresa tu correo electrónico.</span>";
+            }
+
+            btn.disabled = true;
+            msj.innerHTML = "<span class='text-slate-600'>Enviando código a tu correo...</span>";
+
+            fetch('/api/usuarios/solicitar-recuperacion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            })
+            .then(async res => {
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || "No se pudo enviar el código.");
+                return data;
+            })
+            .then(data => {
+                mostrarToast("Código enviado", data.mensaje || "Revisa tu bandeja de entrada.", "success");
+                msj.innerHTML = "<span class='text-emerald-600'>Código enviado. Revisa tu correo (incluyendo Spam).</span>";
+                document.getElementById('recover-step-1').classList.add('hidden');
+                document.getElementById('recover-step-2').classList.remove('hidden');
+                lucide.createIcons();
+            })
+            .catch(err => {
+                msj.innerHTML = `<span class='text-red-600'>${esc(err.message)}</span>`;
+            })
+            .finally(() => { btn.disabled = false; });
+        }
+
+        function confirmarRecuperacion() {
+            const email = document.getElementById('rec-email').value.trim();
+            const codigo = document.getElementById('rec-codigo').value.trim();
+            const nuevaPassword = document.getElementById('rec-pwd').value;
+            const confirmarPwd = document.getElementById('rec-pwd-confirm').value;
+            const msj = document.getElementById('msj-recover');
+            const btn = document.getElementById('btn-rec-guardar');
+
+            if (!codigo || !nuevaPassword || !confirmarPwd) {
+                return msj.innerHTML = "<span class='text-red-600'>Completa todos los campos.</span>";
+            }
+            if (nuevaPassword.length < 6) {
+                return msj.innerHTML = "<span class='text-red-600'>La nueva contraseña debe tener al menos 6 caracteres.</span>";
+            }
+            if (nuevaPassword !== confirmarPwd) {
+                return msj.innerHTML = "<span class='text-red-600'>Las contraseñas no coinciden.</span>";
+            }
+
+            btn.disabled = true;
+            msj.innerHTML = "<span class='text-slate-600'>Actualizando contraseña...</span>";
+
+            fetch('/api/usuarios/restablecer-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, codigo, nuevaPassword })
+            })
+            .then(async res => {
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || "No se pudo restablecer la contraseña.");
+                return data;
+            })
+            .then(() => {
+                mostrarToast("Contraseña restablecida", "Ya puedes iniciar sesión con tu nueva contraseña.", "success");
+                document.getElementById('login-email').value = email;
+                setTimeout(() => toggleAuth('login'), 1200);
+            })
+            .catch(err => {
+                msj.innerHTML = `<span class='text-red-600'>${esc(err.message)}</span>`;
+            })
+            .finally(() => { btn.disabled = false; });
         }
 
         function abrirModalPrivacidad() { document.getElementById('modal-privacidad').classList.remove('hidden'); }
@@ -755,16 +973,17 @@
         }
 
         // ==========================================
-        // MODIFICAR O ELIMINAR CUENTA
+        // MODIFICAR O ELIMINAR CUENTA (CON CONTRASEÑA)
         // ==========================================
         async function ejecutarAccionSegura(metodo) {
             const nuevoN = document.getElementById('auto-nombre').value.trim();
             const nuevoE = document.getElementById('auto-email').value.trim();
             const nuevaPwd = document.getElementById('auto-pwd').value;
             const confirmarPwd = document.getElementById('auto-pwd-confirm').value;
+            let passwordActual = null;
 
-            if(metodo === 'PUT') {
-                if(!nuevoN || !nuevoE) {
+            if (metodo === 'PUT') {
+                if (!nuevoN || !nuevoE) {
                     return mostrarToast("Campos incompletos", "El nombre y el correo electrónico no pueden estar vacíos.", "error");
                 }
                 if (nuevaPwd || confirmarPwd) {
@@ -775,24 +994,26 @@
                         return mostrarToast("Contraseñas distintas", "La nueva contraseña y su confirmación no coinciden.", "error");
                     }
                 }
-                const confirmado = await mostrarConfirmacion({
-                    titulo: "Actualizar información personal",
+                passwordActual = await mostrarConfirmacion({
+                    titulo: "Verificar identidad para actualizar",
                     mensaje: nuevaPwd
-                        ? "¿Deseas guardar los cambios en tu perfil y actualizar tu contraseña?"
-                        : "¿Deseas guardar los cambios realizados en tu nombre y correo electrónico?",
-                    textoConfirmar: "Guardar cambios",
-                    variante: "primary"
+                        ? "Por seguridad, ingresa tu contraseña actual para guardar los cambios y actualizar tu contraseña."
+                        : "Por seguridad, ingresa tu contraseña actual para confirmar los cambios en tu perfil.",
+                    textoConfirmar: "Verificar y guardar",
+                    variante: "primary",
+                    pedirPassword: true
                 });
-                if (!confirmado) return;
+                if (!passwordActual) return;
 
-            } else if(metodo === 'DELETE') {
-                const confirmado = await mostrarConfirmacion({
+            } else if (metodo === 'DELETE') {
+                passwordActual = await mostrarConfirmacion({
                     titulo: "Eliminar cuenta permanentemente",
-                    mensaje: "Tus datos serán eliminados de forma irreversible de nuestra base de datos y no serán utilizados para ningún fin externo.\n\n¿Confirmas que deseas eliminar tu cuenta?",
+                    mensaje: "Tus datos serán eliminados de forma irreversible de nuestra base de datos.\n\nIngresa tu contraseña actual para confirmar la eliminación definitiva.",
                     textoConfirmar: "Sí, eliminar cuenta",
-                    variante: "danger"
+                    variante: "danger",
+                    pedirPassword: true
                 });
-                if (!confirmado) return;
+                if (!passwordActual) return;
             }
 
             const API_URL = `/api/usuarios/${usuarioActual.id}`;
@@ -803,12 +1024,12 @@
             };
 
             if (metodo === 'PUT') {
-                const payload = { nombre: nuevoN, email: nuevoE };
+                const payload = { nombre: nuevoN, email: nuevoE, passwordActual };
                 if (nuevaPwd) payload.password = nuevaPwd;
 
                 fetch(API_URL, { method: 'PUT', headers: headers, body: JSON.stringify(payload) })
                 .then(async res => {
-                    if(res.ok) {
+                    if (res.ok) {
                         mostrarToast(
                             "Perfil actualizado",
                             nuevaPwd ? "Tus datos y contraseña se han actualizado correctamente." : "Tus datos se han guardado correctamente en el sistema.",
@@ -820,18 +1041,25 @@
                         cerrarModalPerfil();
                     } else {
                         const errData = await res.json().catch(() => ({}));
-                        throw new Error(errData.error || "No se pudieron actualizar tus datos en el servidor.");
+                        throw new Error(errData.error || "Contraseña incorrecta o error al actualizar.");
                     }
-                }).catch(err => mostrarToast("Error al guardar", err.message, "error"));
+                }).catch(err => mostrarToast("Error de verificación", err.message, "error"));
 
             } else if (metodo === 'DELETE') {
-                fetch(API_URL, { method: 'DELETE', headers: headers })
-                .then(res => {
-                    if(res.ok) {
+                fetch(API_URL, { 
+                    method: 'DELETE', 
+                    headers: headers,
+                    body: JSON.stringify({ passwordActual })
+                })
+                .then(async res => {
+                    if (res.ok) {
                         mostrarToast("Cuenta eliminada", "Tu registro ha sido cancelado conforme a tus derechos ARCO.", "info");
                         cerrarSesion();
-                    } else throw new Error();
-                }).catch(() => mostrarToast("Error de servidor", "No se pudo completar la eliminación de la cuenta.", "error"));
+                    } else {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.error || "Contraseña incorrecta. No se eliminó la cuenta.");
+                    }
+                }).catch(err => mostrarToast("Error de verificación", err.message, "error"));
             }
         }
 
